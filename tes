@@ -10,4 +10,5 @@ $loop->add(my $stream = Hydrangea::JSONStream->new_for_stdio);
 $loop->await(Hydrangea::Branch::Scriptorium->new(
   stream => $stream,
   loop => $loop,
+  script_directory => 'examples/scriptdir'
 )->run)->get;

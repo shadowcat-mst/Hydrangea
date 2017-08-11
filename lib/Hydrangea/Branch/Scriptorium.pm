@@ -6,9 +6,10 @@ use Hydrangea::Branch::Scriptorium::CommandInvocation;
 use Text::ParseWords qw(shellwords);
 use PerlX::AsyncAwait::Runtime;
 use PerlX::AsyncAwait::Compiler;
+use Path::Tiny;
 use Moo;
 
-#has script_directory => (is => 'ro', required => 1);
+has script_directory => (is => 'ro', required => 1);
 
 has loop => (is => 'ro', required => 1);
 
@@ -18,7 +19,13 @@ has in_flight => (is => 'ro', default => sub { {} });
 
 has tx_gen => (is => 'ro', default => 'A0000');
 
-sub commands { +{ foo => [ 'cat', '-' ] } }
+has commands => (is => 'lazy', builder => sub {
+  my ($self) = @_;
+  my @commands = grep $_->is_file, path($self->script_directory)->children;
+  return +{
+    map +($_->basename, "$_"), @commands,
+  }
+});
 
 sub start_tx {
   my ($self, @start) = @_;
