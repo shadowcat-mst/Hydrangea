@@ -1,13 +1,17 @@
 use strictures 2;
 use IO::Async::Loop;
 use Hydrangea::Root::IRC;
+use Hydrangea::JSONStream;
 
 my $loop = IO::Async::Loop->new;
+
+$loop->add(my $stream = Hydrangea::JSONStream->new_for_stdio);
 
 my $irc = Hydrangea::Root::IRC->new(
   loop => $loop,
   host => 'irc.shadowcat.co.uk',
-  nick => 'hydtest'
+  nick => 'hydtest',
+  stream => $stream,
 );
 
 $loop->await($irc->run)->get;
