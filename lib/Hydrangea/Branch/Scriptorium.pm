@@ -2,6 +2,8 @@ package Hydrangea::Branch::Scriptorium;
 
 use strictures 2;
 use Hydrangea::Future;
+use Hydrangea::Branch::Scriptorium::CommandInvocation;
+use Text::ParseWords qw(shellwords);
 use PerlX::AsyncAwait::Runtime;
 use PerlX::AsyncAwait::Compiler;
 use Moo;
@@ -14,7 +16,9 @@ has stream => (is => 'ro', required => 1);
 
 has in_flight => (is => 'ro', default => sub { {} });
 
-has tx_gen => (is => 'ro', default => 'A0001');
+has tx_gen => (is => 'ro', default => 'A0000');
+
+sub commands { +{ foo => [ 'cat', '-' ] } }
 
 sub start_tx {
   my ($self, @start) = @_;
@@ -22,7 +26,25 @@ sub start_tx {
   $self->stream->write_message(
     [ tx => $id ], @start
   );
-  return $self->in_flight->{$id} = Hydrangea::Future->new;
+  return $self->in_flight->{$id}
+    = Hydrangea::Future->new->on_ready(sub { delete $self->in_flight->{$id} });
+}
+
+sub start_command {
+  my ($self, $from, $cmd, $arg) = @_;
+  my @argv = shellwords($arg);
+  my $id = ++$self->{tx_gen};
+  my $ci = Hydrangea::Branch::Scriptorium::CommandInvocation->new(
+    id => $id,
+    requestor => $from,
+    command => [ $cmd, @argv ],
+    stream => $self->stream,
+    loop => $self->loop,
+  );
+  $self->stream->adopt_future(
+    $ci->run->on_ready(sub { delete $self->in_flight->{$id} })
+  );
+  return $self->in_flight->{$id} = $ci;
 }
 
 sub run {
@@ -40,8 +62,8 @@ sub run {
       await $trunk->write_message_and_close(protocol => 'negotiation_failure');
       return;
     }
-    my $f = $self->start_tx(connection => register => [ qw(branch foo) ]);
-    $f->on_done(sub { warn "registered" });
+    my $f = $self->start_tx(connection => register => [ qw(branch foo) ])
+                 ->then($self->curry::register_commands);
     while (my ($from, @message) = await $trunk->read_message) {
       if ($message[0] eq 'tx') {
         my $targ = $self->in_flight->{$message[1]};
@@ -52,14 +74,26 @@ sub run {
           await $trunk->write_message_and_close(error => 'unacceptable');
           return;
         }
+      } elsif ($message[0] eq 'run') {
+        if (my $cmd = $self->commands->{$message[1]}) {
+          $self->start_command($from, @$cmd, $message[2]);
+        } else {
+          await $trunk->write_message_and_close(error => 'unacceptable');
+          return;
+        }
       } elsif ($message[0] eq 'bye') {
         await $trunk->write_message_and_close(qw(k bye));
         return;
-      } elsif {
+      } else {
         die "Eeep";
       }
     }
   };
+}
+
+sub register_commands {
+  my ($self) = @_;
+  $self->start_tx(connection => commands => [ keys %{$self->commands} ]);
 }
 
 1;
