@@ -8,5 +8,6 @@ my $loop = IO::Async::Loop->new;
 $loop->add(my $stream = Hydrangea::JSONStream->new_for_stdio);
 
 $loop->await(Hydrangea::Branch::Scriptorium->new(
-  trunk_stream => $stream
+  stream => $stream,
+  loop => $loop,
 )->run)->get;
