@@ -18,17 +18,13 @@ has loop => (is => 'ro', required => 1);
 
 has command => (is => 'ro', required => 1);
 
-has exit_future => (is => 'lazy', builder => sub {
-  Future->new;
-});
-
 has process => (is => 'lazy', builder => sub {
   my ($self) = @_;
   IO::Async::Process->new(
     command => $self->command,
     stdin => { via => 'pipe_write' },
     stdout => { via => 'pipe_read' },
-    on_finish => $self->exit_future->curry::done,
+    on_finish => sub {},
   )->$_tap(sub { $_[0]->stdout->configure(on_read => sub { 0 }) });
 });
 
@@ -46,19 +42,12 @@ sub run {
   $self->loop->add($self->process);
   $self->tell_requestor('started');
   return async_do {
-    my $ef = $self->exit_future;
     my $proc_out = $self->process->stdout;
-    my $lf;
-    while (1) {
-      await (Future->needs_any(
-        $ef->without_cancel,
-        $lf = $proc_out->read_until("\n")
-      ));
-      if ($ef->is_ready or $lf->is_ready and ($lf->get)[1]) {
+    while (my ($line, $eof) = await $proc_out->read_until("\n")) {
+      if ($eof) {
         $self->tell_requestor("done");
         return;
       }
-      my $line = $lf->get;
       chomp($line);
       $self->tell_requestor(message => $line);
     }
