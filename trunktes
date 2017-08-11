@@ -1,0 +1,21 @@
+use strictures 2;
+use IO::Async::Loop;
+use Hydrangea::Trunk;
+
+my $loop = IO::Async::Loop->new;
+
+unlink('root.sock');
+
+my $listener = $loop->listen(
+  addr => {
+    family   => "unix",
+    socktype => "stream",
+    path     => "root.sock",
+  },
+  on_accept => sub { 0 },
+)->get;
+
+$loop->await(Hydrangea::Trunk->new(
+  loop => $loop,
+  listener => $listener
+)->run)->get;
