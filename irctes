@@ -1,0 +1,13 @@
+use strictures 2;
+use IO::Async::Loop;
+use Hydrangea::Root::IRC;
+
+my $loop = IO::Async::Loop->new;
+
+my $irc = Hydrangea::Root::IRC->new(
+  loop => $loop,
+  host => 'irc.shadowcat.co.uk',
+  nick => 'hydtest'
+);
+
+$loop->await($irc->run)->get;
