@@ -4,6 +4,7 @@ use strictures 2;
 use Hydrangea::JSONStream;
 use Hydrangea::Trunk::MessageBus;
 use curry;
+use JSON::MaybeXS;
 use PerlX::AsyncAwait::Runtime;
 use PerlX::AsyncAwait::Compiler;
 use Moo;
@@ -117,11 +118,16 @@ sub handle_branch_message {
         = map +{ name => $_, branch => $branch }, @commands;
       $self->branch_connections->{$name}[1] = \@commands;
       $branch->write_message(['connection'],@$from,'done');
+      return;
     }
   }
-  $self->bus->handle_branch_message(
-    [ $name, @$from ], @message
-  );
+  if ($message[0] eq 'bus') {
+    $self->bus->handle_branch_message(
+      [ $name, @$from ], @message[1..$#message]
+    );
+    return;
+  }
+  warn "Unhandled (branch): ".encode_json(\@message);
 }
 
 1;

@@ -4,6 +4,7 @@ use strictures 2;
 use Hydrangea::Future;
 use Hydrangea::Branch::Scriptorium::CommandInvocation;
 use Text::ParseWords qw(shellwords);
+use JSON::MaybeXS;
 use PerlX::AsyncAwait::Runtime;
 use PerlX::AsyncAwait::Compiler;
 use Path::Tiny;
@@ -23,7 +24,7 @@ has commands => (is => 'lazy', builder => sub {
   my ($self) = @_;
   my @commands = grep $_->is_file, path($self->script_directory)->children;
   return +{
-    map +($_->basename, "$_"), @commands,
+    map +($_->basename, [ "$_" ]), @commands,
   }
 });
 
@@ -92,7 +93,7 @@ sub run {
         await $trunk->write_message_and_close(qw(k bye));
         return;
       } else {
-        die "Eeep";
+        warn "Unhandled (trunk): ".encode_json(\@message);
       }
     }
   };

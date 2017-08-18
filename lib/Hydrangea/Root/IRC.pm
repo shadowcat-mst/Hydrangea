@@ -3,6 +3,7 @@ package Hydrangea::Root::IRC;
 use strictures 2;
 use Net::Async::IRC;
 use curry;
+use JSON::MaybeXS;
 use PerlX::AsyncAwait::Runtime;
 use PerlX::AsyncAwait::Compiler;
 use Moo;
@@ -63,7 +64,7 @@ sub run {
 sub handle_irc_privmsg {
   my ($self, undef, $message, $hints) = @_;
   $self->stream->write_message(
-    [ $hints->{prefix_nick} ], bus => message => $hints->{text}
+    [ to => $hints->{prefix_nick} ], bus => message => $hints->{text}
   );
 }
 
@@ -74,15 +75,22 @@ sub handle_trunk_message {
       $self->client->configure(
         on_message_PRIVMSG => $self->curry::weak::handle_irc_privmsg
       );
+      return;
     }
   }
-  if ($cmd eq 'message') {
-    my ($to, $text) = @message;
+  if ($cmd eq 'to') {
+    my ($to, $m, $text) = @message;
+    unless ($m eq 'message') {
+      warn "Unhandled (trunk): ".encode_json([ $cmd, @message ]);
+      return;
+    }
     $self->client->do_PRIVMSG(
       target => $to,
       text => $text,
     );
+    return;
   }
+  warn "Unhandled (trunk): ".encode_json([ $cmd, @message ]);
 }
 
 1;

@@ -2,6 +2,7 @@ package Hydrangea::Trunk::MessageBus;
 
 use strictures 2;
 use Hydrangea::Trunk::Conversation;
+use JSON::MaybeXS;
 use Moo;
 
 has roots => (is => 'ro', default => sub { {} });
@@ -20,14 +21,17 @@ sub handle_root_message {
     my $ident = join "\0", @$from;
     if (my $conv = $self->conversations->{$ident}) {
       $conv->handle_root_message($from, @message[1..$#message]);
+      return;
     } elsif (
       my ($cmd_name, $start_msg) = $message[1] =~ /\A(\w+)(?:\s+(.*))?\Z/
     ) {
       if (my $cmd_spec = $self->commands->{$cmd_name}) {
         $self->start_conversation($ident, $cmd_spec, $from, $start_msg);
       }
+      return;
     }
   }
+  warn "Unhandled (root): ".encode_json([ $from, \@message ]);
 }
 
 sub handle_branch_message {
@@ -36,8 +40,12 @@ sub handle_branch_message {
     my (undef, $txid, @rest) = @message;
     if (my $conv = $self->transactions->{$txid}) {
       $conv->handle_branch_message($from, @rest);
+      return;
     }
+    warn "No tx (branch): ".encode_json(\@message);
+    return;
   }
+  warn "Unhandled (branch): ".encode_json(\@message);
 }
 
 sub relay_branch_message {
@@ -46,7 +54,9 @@ sub relay_branch_message {
   $root = $root->{shift(@message)} while ref($root) eq 'HASH';
   if ($root) {
     $root->write_message([ 'bus' ] => @message);
+    return;
   }
+  warn "Unrelayable (branch): ".encode_json(\@message);
 }
 
 sub conversation_finished {
